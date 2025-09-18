@@ -1,9 +1,9 @@
 name: Ghidra CSKY Extension Build
 
 env:
-  ghidra-url: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.0_build/ghidra_11.0_PUBLIC_20231222.zip
-  ghidra-zip-filename: ghidra_11.0_PUBLIC_20231222.zip
-  ghidra-directory: ghidra_11.0_PUBLIC
+  ghidra-url: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.4.2_build/ghidra_11.4.2_PUBLIC_20250826.zip
+  ghidra-zip-filename: ghidra_11.4.2_PUBLIC_20250826.zip
+  ghidra-directory: ghidra_11.4.2_PUBLIC
 
 on:
   release:
