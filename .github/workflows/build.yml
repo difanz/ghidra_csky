@@ -1,66 +1,66 @@
-name: Ghidra CSKY Extension Build
-
-env:
-  ghidra-url: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.4.2_build/ghidra_11.4.2_PUBLIC_20250826.zip
-  ghidra-zip-filename: ghidra_11.4.2_PUBLIC_20250826.zip
-  ghidra-directory: ghidra_11.4.2_PUBLIC
+name: Build CSKY extension
 
 on:
+  push:
+    branches: [master]
+  pull_request:
   release:
-    types: [ created ]
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Download Ghidra release
-      uses: carlosperate/download-file-action@v1.0.3
-      id: download-ghidra
-      with:
-        file-url: ${{ env.ghidra-url }}
-        file-name: ${{ env.ghidra-zip-filename }}
+      - name: Download latest Ghidra release
+        id: ghidra
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download \
+            --repo NationalSecurityAgency/ghidra \
+            --pattern 'ghidra_*_PUBLIC_*.zip' \
+            --clobber
+          zip=$(printf '%s\n' ghidra_*_PUBLIC_*.zip)
+          unzip -q "$zip"
+          dir="${zip%.zip}"
+          props="$dir/Ghidra/application.properties"
+          java=$(grep '^application.java.compiler=' "$props" | cut -d= -f2)
+          gradle=$(grep '^application.gradle.min=' "$props" | cut -d= -f2)
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "java=$java" >> "$GITHUB_OUTPUT"
+          echo "gradle=$gradle" >> "$GITHUB_OUTPUT"
+          echo "Building against $dir (Java $java, Gradle $gradle)"
 
-    - name: Unzip Ghidra
-      uses: TonyBogdanov/zip@1.0
-      with:
-        args: unzip -qq ${{ steps.download-ghidra.outputs.file-path }} -d .
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ steps.ghidra.outputs.java }}
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.ghidra.outputs.gradle }}
 
-    - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: '8.5'
+      - name: Build extension
+        working-directory: CSKY
+        run: gradle -PGHIDRA_INSTALL_DIR=${{ github.workspace }}/${{ steps.ghidra.outputs.dir }} buildExtension
 
-    - name: Build extension
-      run: ./gradlew build -PGHIDRA_INSTALL_DIR=${{ github.workspace }}/${{ env.ghidra-directory }}
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: csky-extension
+          path: CSKY/dist/*.zip
+          if-no-files-found: error
 
-    - name: Upload built extension
-      uses: actions/upload-artifact@v4
-      with:
-        name: extension
-        path: CSKY/dist/*.zip
-
-  release:
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'release' }}
-    needs: build
-
-    steps:
-    - name: Download built extension
-      uses: actions/download-artifact@v4
-      with:
-        name: extension
-    - name: Upload extension to release
-      uses: skx/github-action-publish-binaries@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        args: '*.zip'
+      - name: Attach extension to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: CSKY/dist/*.zip
